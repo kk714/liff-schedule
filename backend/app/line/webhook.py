@@ -34,7 +34,11 @@ router = APIRouter()
 async def line_webhook(request: Request) -> dict[str, str]:
     settings = request.app.state.settings
     body = await request.body()
-    if not verify(body, request.headers.get("x-line-signature"), settings.line_channel_secret):
+    signature = request.headers.get("x-line-signature")
+    if not verify(body, signature, settings.line_channel_secret):
+        # 只記錄診斷用的事實，不記錄簽章、secret 或內容
+        log.warning("webhook signature rejected: header=%s body_bytes=%d secret_set=%s",
+                    signature is not None, len(body), bool(settings.line_channel_secret))
         raise HTTPException(status_code=401, detail="invalid signature")
     try:
         data = json.loads(body)
