@@ -128,7 +128,15 @@ test("timeline puts a shared meeting in every attendee's column and shows detail
   const blocks = await screen.findAllByRole("button", { name: /B216 組織調整及未來規劃說明/ });
   expect(blocks).toHaveLength(2); // Kyle 與 Tiger 兩欄
   expect(screen.queryByText("別天的行程")).toBeNull(); // 不在這一天的不畫
-  expect(screen.getByText("大家都有空的時段")).toBeInTheDocument();
+  expect(screen.getByText(/點選要一起開會的成員/)).toBeInTheDocument(); // 還沒選人就不標共同空檔
+
+  const picker = screen.getByRole("group", { name: "找共同空檔" });
+  await userEvent.click(within(picker).getByRole("button", { name: "Carrey" }));
+  expect(screen.getByText("Carrey 都有空：08:00–20:00")).toBeInTheDocument();
+  await userEvent.click(within(picker).getByRole("button", { name: "Tiger" }));
+  expect(screen.getByText("Carrey、Tiger 都有空：08:00–11:30、14:00–20:00")).toBeInTheDocument();
+  await userEvent.click(within(picker).getByRole("button", { name: "清除" }));
+  expect(screen.queryByText(/都有空：/)).toBeNull();
 
   await userEvent.click(blocks[0]);
   const sheet = screen.getByRole("dialog", { name: "行程詳情" });

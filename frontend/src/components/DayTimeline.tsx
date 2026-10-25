@@ -1,6 +1,6 @@
 // 團隊單日時間軸：每位成員一欄、縱向為時間。
 // - 受邀的行程同時出現在主辦人與每位參與者的欄位
-// - 淺綠色帶＝這段時間所有人都沒有行程（≥30 分鐘；有人整天行程時當天沒有共同空檔）
+// - 淺綠色帶＝選取的成員這段時間都沒有行程（≥30 分鐘；選取的人有整天行程時當天沒有共同空檔）
 // - 標題最多兩行，點一下看完整內容
 import { useState } from "react";
 
@@ -80,6 +80,8 @@ function columnsOf(e: EventItem): string[] {
   return [e.owner_user_id, ...(e.attendees ?? []).map((a) => a.id)];
 }
 
+const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+
 const label = (e: EventItem) => (e.projection === "busy" ? "忙碌" : e.title ?? "");
 
 export function DayTimeline({
@@ -87,11 +89,13 @@ export function DayTimeline({
   members,
   items,
   nowMinutes,
+  compareIds = [],
 }: {
   day: string;
   members: Member[];
   items: EventItem[];
   nowMinutes?: number | null; // 今天才傳入，用來畫現在時間線
+  compareIds?: string[]; // 要比對共同空檔的成員；空的就不標
 }) {
   const [selected, setSelected] = useState<EventItem | null>(null);
 
@@ -107,10 +111,10 @@ export function DayTimeline({
   const height = (last - first) * HOUR_PX;
   const hours = Array.from({ length: last - first + 1 }, (_, i) => first + i);
   const allDay = items.filter((e) => e.all_day);
-  const someoneAllDay = columns.some((c) => (byColumn.get(c.id) ?? []).some((e) => e.all_day));
-  const free = someoneAllDay
-    ? []
-    : commonFree(allBlocks.map((b) => [b.startMin, b.endMin]), first * 60, last * 60);
+  const compared = columns.filter((c) => compareIds.includes(c.id));
+  const someoneAllDay = compared.some((c) => (byColumn.get(c.id) ?? []).some((e) => e.all_day));
+  const comparedBusy = compared.flatMap((c) => (blocksByColumn.get(c.id) ?? []).map((b): [number, number] => [b.startMin, b.endMin]));
+  const free = compared.length === 0 || someoneAllDay ? [] : commonFree(comparedBusy, first * 60, last * 60);
   const gridCols = { gridTemplateColumns: `40px repeat(${columns.length}, minmax(80px, 1fr))` };
   const y = (min: number) => ((min - first * 60) / 60) * HOUR_PX;
 
@@ -120,7 +124,7 @@ export function DayTimeline({
         <div className="timeline" style={gridCols} role="grid" aria-label="團隊單日行程">
           <div className="tl-corner" />
           {columns.map((c) => (
-            <div key={c.id} className="tl-name" role="columnheader">{c.name}</div>
+            <div key={c.id} className={`tl-name ${compareIds.includes(c.id) ? "compared" : ""}`} role="columnheader">{c.name}</div>
           ))}
 
           {allDay.length > 0 && (
@@ -173,7 +177,16 @@ export function DayTimeline({
           ))}
         </div>
       </div>
-      {free.length > 0 && <p className="tl-legend"><span className="tl-legend-swatch" />大家都有空的時段</p>}
+      {compared.length > 0 && (
+        <p className="tl-legend" aria-live="polite">
+          <span className="tl-legend-swatch" />
+          {someoneAllDay
+            ? `${compared.filter((c) => (byColumn.get(c.id) ?? []).some((e) => e.all_day)).map((c) => c.name).join("、")} 這天有整天行程`
+            : free.length > 0
+              ? `${compared.map((c) => c.name).join("、")} 都有空：${free.map(([s, e]) => `${hhmm(s)}–${hhmm(e)}`).join("、")}`
+              : `${compared.map((c) => c.name).join("、")} 這天沒有 30 分鐘以上的共同空檔`}
+        </p>
+      )}
 
       {selected && (
         <div className="sheet-backdrop" onClick={() => setSelected(null)}>

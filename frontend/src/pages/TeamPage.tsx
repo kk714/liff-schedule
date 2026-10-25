@@ -1,4 +1,4 @@
-// 團隊行程：一天一天看，以時間軸呈現每位成員的行程，方便找出大家都有空的時段。
+// 團隊行程：一天一天看，以時間軸呈現每位成員的行程；點選要開會的成員，標出他們的共同空檔。
 // 權限由後端套用：本人與團隊可見的行程顯示標題，「僅忙碌」只顯示忙碌。
 import { useEffect, useState } from "react";
 
@@ -26,6 +26,8 @@ export function TeamPage() {
   const [items, setItems] = useState<EventItem[] | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const toggle = (id: string) => setCompareIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +74,19 @@ export function TeamPage() {
       {session.teams.length > 0 && (items === null || members === null) && !error && <Status kind="loading" />}
       {items !== null && members !== null && session.teams.length > 0 && (
         <>
-          <DayTimeline day={day} members={members} items={items} nowMinutes={day === today ? nowMinutesIn(tz) : null} />
+          <div className="compare" role="group" aria-label="找共同空檔">
+            <span className="compare-label">找共同空檔</span>
+            {members.map((m) => (
+              <button key={m.id} type="button" className={`chip small ${compareIds.includes(m.id) ? "on" : ""}`}
+                      aria-pressed={compareIds.includes(m.id)} onClick={() => toggle(m.id)}>
+                {m.display_name}
+              </button>
+            ))}
+            {compareIds.length > 0 && <button type="button" className="link" onClick={() => setCompareIds([])}>清除</button>}
+          </div>
+          {compareIds.length === 0 && <p className="muted compare-hint">點選要一起開會的成員，時間軸會用綠色標出他們都有空的時段。</p>}
+          <DayTimeline day={day} members={members} items={items} compareIds={compareIds}
+                       nowMinutes={day === today ? nowMinutesIn(tz) : null} />
           {items.length === 0 && <p className="muted center">這天還沒有人登錄行程。沒有資料不代表大家都有空。</p>}
           {truncated && <p className="muted center">行程超過 100 筆，部分未顯示。</p>}
         </>
