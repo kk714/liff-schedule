@@ -22,6 +22,8 @@ class ChatJob:
     received_at: datetime
     reply_token: str | None = None
     reply_deadline: datetime | None = None
+    # {"kind": "text"|"postback"|"non_text", "postback": "action=confirm&..."}
+    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

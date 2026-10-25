@@ -64,6 +64,8 @@ class DraftInput:
     intent: Literal["create", "update", "cancel"]
     fields: DraftFields = field(default_factory=DraftFields)
     event_id: uuid.UUID | None = None
+    # 欄位完整但仍需追問的項目（例如年份不明、「這週X」已過），草稿維持 collecting
+    blockers: list[str] = field(default_factory=list)
 
 
 def draft_input_from_parsed(parsed: ParsedSchedule) -> DraftInput:
@@ -137,6 +139,7 @@ class DraftService:
             defaults, missing = [], []
             if data.intent == "update" and not payload:
                 missing = ["changes"]
+        missing = missing + [b for b in data.blockers if b not in missing]
 
         draft = EventDraft(
             organization_id=user.organization_id,
@@ -154,7 +157,7 @@ class DraftService:
 
     async def update(
         self, session: AsyncSession, user: User, draft_id: uuid.UUID, draft_version: int,
-        fields: DraftFields, *, now: datetime,
+        fields: DraftFields, *, now: datetime, blockers: list[str] | None = None,
     ) -> EventDraft:
         """表單或追問修改草稿；內容變更遞增版本，舊確認卡隨之失效（§5.3）。"""
         _ensure_active(user)
@@ -168,6 +171,7 @@ class DraftService:
             payload = {**{k: v for k, v in draft.payload_json.items() if k in EVENT_FIELDS},
                        **_serialize(fields.model_dump(exclude_none=True))}
             defaults, missing = [], ([] if payload or draft.intent == "cancel" else ["changes"])
+        missing = missing + [b for b in (blockers or []) if b not in missing]
         draft.payload_json = {**_serialize(payload), "defaults_applied": defaults, "missing_fields": missing}
         draft.status = "collecting" if missing else "awaiting_confirmation"
         draft.draft_version += 1

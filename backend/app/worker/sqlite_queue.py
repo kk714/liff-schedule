@@ -50,14 +50,14 @@ class SQLiteJobSource:
             .where(AsyncJob.id.in_(ready))
             .values(status="running", attempts=AsyncJob.attempts + 1, locked_until=now + self._lease)
             .returning(AsyncJob.id, AsyncJob.user_id, AsyncJob.line_user_id, AsyncJob.message_text,
-                       AsyncJob.received_at, AsyncJob.reply_token, AsyncJob.reply_deadline)
+                       AsyncJob.received_at, AsyncJob.reply_token, AsyncJob.reply_deadline, AsyncJob.payload)
         )
         async with self._engine.begin() as conn:
             rows = (await conn.execute(stmt)).all()
         jobs = [
             ChatJob(job_id=str(r.id), user_id=str(r.user_id), line_user_id=r.line_user_id,
                     message_text=r.message_text, received_at=r.received_at,
-                    reply_token=r.reply_token, reply_deadline=r.reply_deadline)
+                    reply_token=r.reply_token, reply_deadline=r.reply_deadline, payload=r.payload or {})
             for r in rows
         ]
         return sorted(jobs, key=lambda j: j.received_at)  # RETURNING 不保證順序

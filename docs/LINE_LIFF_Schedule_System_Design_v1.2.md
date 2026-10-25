@@ -440,6 +440,11 @@ Worker 處理 LINE 訊息後產生的內部結果格式，用來組裝 LINE 回�
    - NOVARK 呼叫含重試的總時間預算設定在 Reply Token 仍可使用的範圍內（實際上限依 LINE 官方文件與實測決定，預設保守值並可配置）；超出預算即停止重試，以 Reply 回覆「處理較久，請稍後或改用表單」並附 LIFF 連結。
    - 只有確實無法以 Reply 完成時才使用 Push，並處理封鎖、不可達、額度與計費限制。
    - 每月 Push 用量達額度 80% 告警；額度用盡時停止 Push，所有聊天結果改以 Reply 回覆固定短句＋LIFF 結果連結，不得讓使用者無回應。
+   - **實作（2026-10-25）**：webhook 在 `backend/app/line/webhook.py`，對話處理器在 `backend/app/chat/handler.py`，Worker 隨 FastAPI 啟動（`backend/app/main.py`）。
+     - 未綁定的 LINE 使用者回綁定說明；非一對一來源一律略過。
+     - 處理器分三段：短交易讀取 → 交易外呼叫 NOVARK → 短交易寫入。SQLite 的寫入鎖不能跨過 5–8 秒的 NOVARK 呼叫，否則 webhook 會寫不進去；這點有測試保護。
+     - 只有一份待確認草稿時，使用者回「確認」「好」就直接提交，不送 NOVARK（§5.3）。
+     - 修改／取消：在本人行程中依標題、日期、時間找目標；找到多筆時用 quick reply 列出候選讓使用者選（A05）。
 6. Push 失敗仍保留草稿與行程，LIFF 可讀取結果。支援的發送 API 使用官方重試機制；不支援時不宣稱傳送具備 exactly-once 保證。
 7. 系統的 exactly-once 目標限於業務寫入：重送 Webhook、重點確認、Worker 重啟都不能重複新增行程。
 
