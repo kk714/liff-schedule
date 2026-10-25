@@ -225,6 +225,12 @@ Adapter 將此格式轉成 NOVARK 支援的請求；回應抽取文字或 JSON �
 - 管理員先建立成員，再發出單次使用、72 小時到期且綁定目標成員的邀請連結／邀請碼。
 - 使用者 LINE 登入後兌換，後端交易內檢查有效期、使用次數與既有綁定。兌換頁先顯示目標成員姓名，由本人確認「這是我」後才完成綁定；不符則取消，邀請保持可用。
 - 管理員可撤銷某成員的 LINE 綁定（例如換手機或換 LINE 帳號）：撤銷時立即使該成員所有 session 與待確認草稿失效，再重新發出邀請。撤銷與重綁均寫入稽核紀錄。
+- **實作（2026-10-25）**：
+  - 服務在 `backend/app/auth/`，API 在 `backend/app/api/auth.py`。v1 沒有管理頁，以 CLI `python -m app.cli` 建立組織、成員、團隊與邀請，也用來撤銷綁定、停權。
+  - 兌換分兩步：先呼叫 `POST /api/invitations/preview` 顯示姓名，本人確認後再呼叫 `POST /api/invitations/redeem`（邀請 token＋LINE ID token）。
+  - 對同一位成員發新邀請，會撤銷他舊的、還沒用過的邀請。
+  - 停權（`set-status`）會撤銷所有 session、放棄未完成草稿，但保留 LINE 綁定，復職不必重新邀請；`revoke-binding` 才會刪除綁定。
+  - Session 存在 HttpOnly＋Secure＋SameSite=Lax 的 `sid` Cookie，12 小時到期；變更操作以 double-submit 驗證 CSRF（`csrf` Cookie 對應 `X-CSRF-Token` header）。
 - 不以可自由修改的 LINE 暱稱或自行輸入姓名自動取得公司身分。
 - Webhook 的 userId 只有在驗簽成功後才可使用，且仍需對應啟用成員。
 - 停權／離職即撤銷 session、阻擋聊天操作，並依資料保留規則處理既有行程。
@@ -378,7 +384,8 @@ stateDiagram-v2
 |---|---|---|
 | POST | /api/auth/line | 驗證 LINE ID token，建立 session |
 | POST | /api/auth/logout | 撤銷 session |
-| POST | /api/invitations/redeem | 登入後兌換邀請綁定成員 |
+| POST | /api/invitations/preview | 以邀請 token 查詢目標成員姓名，供本人確認 |
+| POST | /api/invitations/redeem | 以邀請 token＋LINE ID token 兌換、綁定成員並建立 session |
 | GET | /api/me | 本人與可用團隊 |
 | PATCH | /api/me/preferences | 時區與預設分享設定 |
 | GET | /api/members | 僅回傳可查成員，可依名稱搜尋 |

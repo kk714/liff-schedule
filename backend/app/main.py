@@ -17,7 +17,10 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.api.auth import router as auth_router
+from app.auth.line_login import LineIdTokenVerifier
 from app.chat import ConversationHandler
+from app.services.errors import ServiceError
 from app.config import Settings
 from app.db.engine import create_engine, session_factory
 from app.line.messaging import LineMessenger
@@ -39,6 +42,7 @@ async def lifespan(app: FastAPI):
     app.state.sessions = session_factory(engine)
 
     http = httpx.AsyncClient()
+    app.state.line_verifier = LineIdTokenVerifier(settings.line_login_channel_id, http)
     stop = asyncio.Event()
     worker_task = None
     if settings.worker_enabled and _worker_configured(settings):
@@ -69,6 +73,13 @@ def _worker_configured(settings: Settings) -> bool:
 
 app = FastAPI(title="LINE 團隊行程助理", lifespan=lifespan)
 app.include_router(line_router)
+app.include_router(auth_router)
+
+
+@app.exception_handler(ServiceError)
+async def service_error(_request, exc: ServiceError) -> JSONResponse:
+    # 只回錯誤代碼，不回內部訊息（§9.2）
+    return JSONResponse({"error": exc.code}, status_code=exc.http_status)
 
 
 @app.get("/healthz")

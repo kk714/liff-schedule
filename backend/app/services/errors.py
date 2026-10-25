@@ -15,6 +15,30 @@ class NotFound(ServiceError):
     code = "not_found"
 
 
+class Unauthorized(ServiceError):
+    http_status = 401
+    code = "unauthorized"
+
+
+class CsrfFailed(ServiceError):
+    http_status = 403
+    code = "csrf_failed"
+
+
+class InvitationInvalid(ServiceError):
+    """邀請不存在、已使用、已撤銷或已過期。"""
+
+    http_status = 410
+    code = "invitation_invalid"
+
+
+class AlreadyBound(ServiceError):
+    """這個 LINE 帳號或成員已有綁定。"""
+
+    http_status = 409
+    code = "already_bound"
+
+
 class MemberInactive(ServiceError):
     http_status = 403
     code = "member_inactive"
