@@ -11,6 +11,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet || echo -dirty)"
 SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes "$HOST")
 
+if [ "${SKIP_TESTS:-0}" != "1" ]; then
+  # 測試沒過就不部署（曾因語法錯誤直接部署導致服務重啟循環）
+  echo "==> tests"
+  PY="$ROOT/backend/.venv/Scripts/python"; [ -x "$PY" ] || PY="$ROOT/backend/.venv/bin/python"
+  (cd "$ROOT/backend" && "$PY" -m pytest -q -x) || { echo "backend tests failed; not deploying" >&2; exit 1; }
+  (cd "$ROOT/frontend" && npx vitest run --silent) || { echo "frontend tests failed; not deploying" >&2; exit 1; }
+fi
+
 echo "==> build liff-schedule:$TAG"
 docker build -t "liff-schedule:$TAG" -t liff-schedule:latest "$ROOT"
 
