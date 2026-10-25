@@ -15,6 +15,7 @@ class Settings:
     line_channel_secret: str = field(default="", repr=False)
     line_channel_access_token: str = field(default="", repr=False)
     liff_url: str = ""
+    liff_id: str = ""  # 前端 liff.init 使用，由 /api/config 提供
     line_login_channel_id: str = ""  # LIFF 所屬 LINE Login channel，用於 ID token 的 audience
     line_provider_id: str = "default"  # Login 與 Messaging API 須在同一 Provider（§4.1）
     cookie_secure: bool = True
@@ -28,6 +29,7 @@ class Settings:
             line_channel_secret=os.environ.get("LINE_CHANNEL_SECRET", ""),
             line_channel_access_token=os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", ""),
             liff_url=os.environ.get("LIFF_URL", ""),
+            liff_id=os.environ.get("LIFF_ID", ""),
             line_login_channel_id=os.environ.get("LINE_LOGIN_CHANNEL_ID", ""),
             line_provider_id=os.environ.get("LINE_PROVIDER_ID", "default"),
             cookie_secure=_bool("COOKIE_SECURE", True),

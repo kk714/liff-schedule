@@ -11,13 +11,16 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import text
 
 from app.api.auth import router as auth_router
+from app.api.drafts import router as drafts_router
+from app.api.events import router as events_router
 from app.auth.line_login import LineIdTokenVerifier
 from app.chat import ConversationHandler
 from app.services.errors import ServiceError
@@ -74,6 +77,8 @@ def _worker_configured(settings: Settings) -> bool:
 app = FastAPI(title="LINE 團隊行程助理", lifespan=lifespan)
 app.include_router(line_router)
 app.include_router(auth_router)
+app.include_router(drafts_router)
+app.include_router(events_router)
 
 
 @app.exception_handler(ServiceError)
@@ -90,3 +95,23 @@ async def healthz() -> JSONResponse:
     except Exception as exc:  # 健康檢查只回報狀態，不中斷服務
         return JSONResponse({"status": "error", "detail": type(exc).__name__}, status_code=503)
     return JSONResponse({"status": "ok", "schema_version": version})
+
+
+@app.get("/{path:path}", include_in_schema=False)
+async def spa(path: str) -> Response:
+    """LIFF 前端（與 API 同網域，§12）。存在的檔案直接回傳，其餘路徑一律回 index.html 交給前端路由。
+
+    必須是最後一個註冊的路由，才不會蓋掉 API。
+    """
+    if path.startswith("api/"):
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    root = Path(os.environ.get("STATIC_DIR", "/app/static")).resolve()
+    index = root / "index.html"
+    if not index.is_file():
+        return JSONResponse({"error": "frontend_not_built"}, status_code=404)
+    candidate = (root / path).resolve()
+    if path and candidate.is_file() and candidate.is_relative_to(root):  # 擋掉 ../ 路徑穿越
+        # Vite 產出的 assets 檔名含雜湊，可長期快取
+        cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
+        return FileResponse(candidate, headers={"Cache-Control": cache})
+    return FileResponse(index, headers={"Cache-Control": "no-cache"})

@@ -467,12 +467,19 @@ Worker 處理 LINE 訊息後產生的內部結果格式，用來組裝 LINE 回�
 | 個人設定 | 時區、預設分享、帳號狀態 |
 | 管理頁 | 成員、邀請、團隊、停權；不提供私人行程瀏覽 |
 
+**實作（2026-10-25）**：`frontend/`（React＋TypeScript＋Vite＋LIFF SDK）。
+- 路由：`/bind?invite=`（綁定）、`/drafts/:id`（草稿確認／修改）、`/`（我的行程：今天／本週／本月）、`/team`（團隊週曆）。新增、修改、取消都先建立草稿，再到確認頁確認，和 LINE 對話走同一套規則。
+- 啟動：從 `/api/config` 取得 LIFF ID → `liff.init` → 已有 session 就直接使用；沒有就以 LINE ID token 登入。未綁定的使用者只看得到綁定說明。
+- 時間一律使用後端回傳的使用者時區當地時間字串，不經過手機時區換算。
+- 每個畫面都有載入中、錯誤、空狀態。查無行程時提示「在 LINE 跟我說一句話就能新增」，團隊頁則註明「沒有資料不代表大家都有空」。
+- 後端草稿與查詢 API：`backend/app/api/drafts.py`、`backend/app/api/events.py`；另新增 `GET /api/members`、`GET /api/config`。
+
 行事曆上固定提示「僅顯示本系統已登錄且您有權限查看的行程」。手機採清單優先、週曆輔助，日期時間按使用者時區顯示。LIFF 直接呼叫本系統 API，不必透過 liff.sendMessages() 繞回官方帳號以免形成雙重請求。
 
 ## 12. 部署與維運
 
 - 建議一個專案包含 frontend、backend、migrations、deploy，前後端經反向代理使用同網域 HTTPS。
-- **資料庫：SQLite（2026-10-25 決策，資料量小）**。部署為一個 Docker image（`backend/Dockerfile`）：
+- **資料庫：SQLite（2026-10-25 決策，資料量小）**。部署為一個 Docker image（根目錄 `Dockerfile`，多階段：先用 Node 建置 LIFF 前端，再放進 Python image，由 FastAPI 以同網域提供）：
   - image 只包含程式與 migration；資料庫檔案放在 `/data/app.db`，**必須掛載 volume**，否則重新部署資料會消失。容器啟動時自動執行 `alembic upgrade head`。
   - **只能一個實例、一個程序**（`uvicorn --workers 1`）。Worker 以背景工作跑在同一程序內；工作佇列存在資料庫裡，所以重啟不會遺失工作。不能水平擴充。
   - WAL、`busy_timeout=5000`、外鍵檢查在每條連線開啟（`backend/app/db/engine.py`）。

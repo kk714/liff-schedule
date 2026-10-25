@@ -179,6 +179,14 @@ class DraftService:
         await session.flush()
         return draft
 
+    async def get(self, session: AsyncSession, user: User, draft_id: uuid.UUID) -> EventDraft:
+        draft = await session.scalar(select(EventDraft).where(
+            EventDraft.id == draft_id, EventDraft.user_id == user.id,
+            EventDraft.organization_id == user.organization_id))
+        if draft is None:
+            raise NotFound("draft not found")
+        return draft
+
     async def abandon(
         self, session: AsyncSession, user: User, draft_id: uuid.UUID, draft_version: int, *, now: datetime
     ) -> None:
