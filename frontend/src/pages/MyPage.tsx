@@ -55,6 +55,19 @@ export function MyPage() {
     }
   }
 
+  async function decline(eventId: string) {
+    if (!window.confirm("確定不參加這個行程？")) return;
+    setBusy(true);
+    try {
+      await api.decline(eventId);
+      setItems((list) => list?.filter((e) => e.id !== eventId) ?? null);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div>
       <header className="page-header">
@@ -81,12 +94,16 @@ export function MyPage() {
         <EventList
           items={items}
           showOwner={false}
-          actions={(e) => (
-            <>
-              <button className="link" disabled={busy} onClick={() => void openDraft("update", e.id)}>修改</button>
-              <button className="link danger" disabled={busy} onClick={() => void openDraft("cancel", e.id)}>取消</button>
-            </>
-          )}
+          actions={(e) =>
+            e.role === "attendee" ? (
+              <button className="link danger" disabled={busy} onClick={() => void decline(e.id)}>不參加</button>
+            ) : (
+              <>
+                <button className="link" disabled={busy} onClick={() => void openDraft("update", e.id)}>修改</button>
+                <button className="link danger" disabled={busy} onClick={() => void openDraft("cancel", e.id)}>取消</button>
+              </>
+            )
+          }
         />
       )}
       {hasMore && <p className="muted">行程較多，只顯示前 100 筆，請切換到較短的範圍。</p>}

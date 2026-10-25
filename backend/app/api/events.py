@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -13,7 +13,7 @@ from sqlalchemy.orm import aliased
 from app.db.models import Team, TeamMember, User
 from app.services import EventQueryService
 
-from .auth import current_user
+from .auth import csrf_protected, current_user
 from .schemas import view_out
 
 router = APIRouter(prefix="/api")
@@ -55,6 +55,15 @@ async def get_event(event_id: uuid.UUID, request: Request, user: User = Depends(
         view = await queries.get_visible(s, user, event_id)
         await s.rollback()
     return view_out(view, user.id, ZoneInfo(user.timezone))
+
+
+@router.post("/events/{event_id}/decline", dependencies=[Depends(csrf_protected)])
+async def decline_event(event_id: uuid.UUID, request: Request, user: User = Depends(current_user)) -> dict:
+    """受邀者不參加：自己的行程表與團隊時間軸上不再出現這筆；主辦人的行程不變。"""
+    async with request.app.state.sessions() as s:
+        await queries.decline(s, user, event_id, now=datetime.now(timezone.utc))
+        await s.commit()
+    return {"status": "declined"}
 
 
 @router.get("/members")

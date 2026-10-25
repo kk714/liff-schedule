@@ -49,6 +49,11 @@ export function EventList({
                     <span className="event-title">{e.projection === "busy" ? "忙碌" : e.title}</span>
                     {multiDayNote(e) && <span className="event-meta">{multiDayNote(e)}</span>}
                     {e.location && <span className="event-meta">{e.location}</span>}
+                    {e.role === "attendee" && <span className="event-meta">由 {e.owner_name} 邀請</span>}
+                    {e.role === "owner" && e.attendees?.length > 0 && (
+                      <span className="event-meta">與 {e.attendees.map((a) => a.name).join("、")}</span>
+                    )}
+                    {e.series && <span className="event-meta">每週重複</span>}
                     {e.mine && e.visibility && e.visibility !== "team_detail" && (
                       <span className="event-meta">{VISIBILITY_LABEL[e.visibility]}</span>
                     )}

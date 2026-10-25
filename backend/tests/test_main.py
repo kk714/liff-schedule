@@ -22,7 +22,7 @@ def test_healthz_reports_schema_version(tmp_path, monkeypatch):
     with TestClient(app) as client:
         resp = client.get("/healthz")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok", "schema_version": "0002"}
+    assert resp.json() == {"status": "ok", "schema_version": "0003"}
 
 
 def test_healthz_unavailable_without_schema(tmp_path, monkeypatch):

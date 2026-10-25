@@ -9,7 +9,8 @@ from zoneinfo import ZoneInfo
 from app.db.models import Event, EventDraft
 from app.services import EventView
 
-DRAFT_FIELDS = ("title", "start_local", "end_local", "all_day", "location", "notes", "visibility")
+DRAFT_FIELDS = ("title", "start_local", "end_local", "all_day", "location", "notes", "visibility",
+                "recurrence", "attendee_ids", "scope")
 
 
 def _local(value, tz: ZoneInfo) -> str | None:
@@ -23,7 +24,7 @@ def event_out(ev: Event, tz: ZoneInfo) -> dict[str, Any]:
         "start_date": ev.start_date.isoformat() if ev.start_date else None,
         "end_date": ev.end_date.isoformat() if ev.end_date else None,
         "location": ev.location, "notes": ev.notes, "visibility": ev.visibility,
-        "status": ev.status, "version": ev.version,
+        "status": ev.status, "version": ev.version, "series": ev.series_id is not None,
     }
 
 
@@ -49,4 +50,6 @@ def view_out(v: EventView, viewer_id, tz: ZoneInfo) -> dict[str, Any]:
         "start_date": v.start_date.isoformat() if v.start_date else None,
         "end_date": v.end_date.isoformat() if v.end_date else None,
         "title": v.title, "location": v.location, "notes": v.notes, "visibility": v.visibility,
+        "role": v.role, "series": v.series,
+        "attendees": [{"id": str(uid), "name": name} for uid, name in v.attendees],
     }

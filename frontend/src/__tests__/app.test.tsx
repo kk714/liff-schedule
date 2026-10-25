@@ -169,6 +169,7 @@ describe("draft page", () => {
 });
 
 describe("team page", () => {
+  const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
   const MEMBERS = {
     members: [
       { id: "u1", display_name: "Kyle", me: true, teams: [] },
@@ -178,7 +179,7 @@ describe("team page", () => {
   };
   const ev = (over: object) => ({
     id: "e", owner_user_id: "u1", owner_name: "Kyle", mine: true, projection: "detail", all_day: false,
-    start_local: "2026-10-27T11:30:00", end_local: "2026-10-27T14:00:00", start_date: null, end_date: null,
+    start_local: `${TODAY}T11:30:00`, end_local: `${TODAY}T14:00:00`, start_date: null, end_date: null,
     title: "B216 組織調整及未來規劃說明", location: "宏匯大樓 8樓會議室", notes: null, visibility: "team_detail", ...over,
   });
 
@@ -190,7 +191,7 @@ describe("team page", () => {
         items: [
           ev({ id: "e1" }),
           ev({ id: "e2", owner_user_id: "u2", owner_name: "李經理", mine: false, projection: "busy", title: null,
-               location: null, start_local: "2026-10-27T15:00:00", end_local: "2026-10-27T16:00:00" }),
+               location: null, start_local: `${TODAY}T15:00:00`, end_local: `${TODAY}T16:00:00` }),
         ],
         has_more: false, next_offset: null,
       },

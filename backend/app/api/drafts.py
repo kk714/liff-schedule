@@ -55,7 +55,8 @@ async def get_draft(draft_id: uuid.UUID, request: Request, user: User = Depends(
 async def patch_draft(draft_id: uuid.UUID, body: PatchIn, request: Request,
                       user: User = Depends(current_user)) -> dict:
     async with request.app.state.sessions() as s:
-        draft = await drafts.update(s, user, draft_id, body.draft_version, body.fields, now=_now())
+        cleared = {k for k in body.fields.model_fields_set if getattr(body.fields, k) is None}
+        draft = await drafts.update(s, user, draft_id, body.draft_version, body.fields, now=_now(), clear=cleared)
         out = draft_out(draft, await _event_for(s, draft), ZoneInfo(user.timezone))
         await s.commit()
     return out
@@ -68,7 +69,7 @@ async def confirm_draft(draft_id: uuid.UUID, body: VersionIn, request: Request,
     async with request.app.state.sessions() as s:
         result = await drafts.confirm(s, user, draft_id, body.draft_version, now=_now(),
                                       request_id=request.headers.get("x-request-id"))
-        out = {"intent": result.intent, "already_committed": result.already_committed,
+        out = {"intent": result.intent, "already_committed": result.already_committed, "affected": result.affected,
                "event": event_out(result.event, ZoneInfo(user.timezone))}
         await s.commit()
     return out

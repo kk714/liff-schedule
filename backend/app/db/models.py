@@ -6,6 +6,7 @@
     organizations ─┬─ users ─┬─ external_identities（LINE 綁定）
                    │         ├─ sessions／invitations／organization_roles
                    │         ├─ events ◀── event_drafts ◀── conversation_sessions.pending_draft_id
+                   │         │    └─ event_attendees（受邀成員）
                    │         └─ async_jobs（Worker 佇列，見 app/worker/sqlite_queue.py）
                    └─ teams ─── team_members
     inbound_events（webhook 去重）、message_outbox、idempotency_keys、audit_logs、llm_call_logs
@@ -178,6 +179,26 @@ class Event(UUIDPrimaryKey, Timestamps, Base):
     # 列舉保留擴充值（附錄 A 的外部來源）
     source: Mapped[str] = mapped_column(str_enum("event_source", "conversation", "manual"))
     version: Mapped[int] = mapped_column(Integer, default=1)
+    # 每週重複時，同一次建立的所有行程共用一個 series_id（取消時可選「這次與之後全部」）
+    series_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+
+
+class EventAttendee(UUIDPrimaryKey, Timestamps, Base):
+    """受邀參與者。行程只有一筆（擁有者為主辦人），參與者看到的是同一筆，主辦人修改會同步。"""
+
+    __tablename__ = "event_attendees"
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id"),
+        ForeignKeyConstraint(["organization_id", "user_id"], ["users.organization_id", "users.id"],
+                             ondelete="CASCADE"),
+        Index(None, "user_id", "status"),
+    )
+
+    organization_id: Mapped[uuid.UUID]
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID]
+    status: Mapped[str] = mapped_column(str_enum("attendee_status", "accepted", "declined"), default="accepted")
+    added_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
 
 class EventDraft(UUIDPrimaryKey, Timestamps, Base):

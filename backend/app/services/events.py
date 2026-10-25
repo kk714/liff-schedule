@@ -22,7 +22,7 @@ from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.db.models import Event, Team, TeamMember, User
+from app.db.models import Event, EventAttendee, Team, TeamMember, User
 
 from .errors import MemberInactive, NotFound, RangeTooLarge
 
@@ -45,6 +45,9 @@ class EventView:
     location: str | None = None
     notes: str | None = None
     visibility: str | None = None  # 只有本人看得到自己的分享設定
+    role: Literal["owner", "attendee", "viewer"] = "viewer"
+    series: bool = False  # 每週重複建立的其中一筆
+    attendees: tuple[tuple[uuid.UUID, str], ...] = ()  # 受邀且接受的成員（id, 名字）
 
 
 @dataclass(frozen=True)
@@ -64,12 +67,20 @@ def _shares_team(viewer_id: uuid.UUID):
     )
 
 
+def _attends(user_ids):
+    """這些成員之中，有人是這筆行程的受邀參與者（未拒絕）。"""
+    ids = user_ids if isinstance(user_ids, (list, tuple, set)) else [user_ids]
+    return exists(select(1).where(EventAttendee.event_id == Event.id, EventAttendee.user_id.in_(ids),
+                                  EventAttendee.status == "accepted"))
+
+
 def _visible(viewer: User):
     return and_(
         Event.organization_id == viewer.organization_id,
         Event.status == "active",
         or_(
             Event.owner_user_id == viewer.id,
+            _attends(viewer.id),  # 受邀者一律看得到完整內容
             and_(
                 Event.visibility.in_(("busy_only", "team_detail")),
                 User.status == "active",
@@ -94,9 +105,11 @@ def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _view(event: Event, owner_name: str, viewer: User) -> EventView:
+def _view(event: Event, owner_name: str, viewer: User,
+          attendees: tuple[tuple[uuid.UUID, str], ...] = ()) -> EventView:
     own = event.owner_user_id == viewer.id
-    detail = own or event.visibility == "team_detail"
+    attending = any(uid == viewer.id for uid, _ in attendees)
+    detail = own or attending or event.visibility == "team_detail"
     return EventView(
         id=event.id, owner_user_id=event.owner_user_id, owner_name=owner_name,
         projection="detail" if detail else "busy", all_day=event.all_day,
@@ -105,7 +118,25 @@ def _view(event: Event, owner_name: str, viewer: User) -> EventView:
         location=event.location if detail else None,
         notes=event.notes if detail else None,
         visibility=event.visibility if own else None,
+        role="owner" if own else "attendee" if attending else "viewer",
+        series=event.series_id is not None,
+        attendees=attendees,
     )
+
+
+async def _attendees_of(session: AsyncSession, event_ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple]:
+    if not event_ids:
+        return {}
+    rows = (await session.execute(
+        select(EventAttendee.event_id, User.id, User.display_name)
+        .join(User, User.id == EventAttendee.user_id)
+        .where(EventAttendee.event_id.in_(event_ids), EventAttendee.status == "accepted", User.status == "active")
+        .order_by(User.display_name)
+    )).all()
+    out: dict[uuid.UUID, list] = {}
+    for event_id, uid, name in rows:
+        out.setdefault(event_id, []).append((uid, name))
+    return {k: tuple(v) for k, v in out.items()}
 
 
 class EventQueryService:
@@ -128,21 +159,25 @@ class EventQueryService:
             .where(_visible(viewer), _overlaps(start, end, ZoneInfo(viewer.timezone)))
         )
         if member_ids:
-            stmt = stmt.where(Event.owner_user_id.in_(member_ids))
+            # 成員自己的行程，以及他受邀參加的行程
+            stmt = stmt.where(or_(Event.owner_user_id.in_(member_ids), _attends(member_ids)))
         if team_id is not None:
-            stmt = stmt.where(
-                exists(select(1).where(TeamMember.team_id == team_id,
-                                       TeamMember.user_id == Event.owner_user_id))
-            )
+            team_users = select(TeamMember.user_id).where(TeamMember.team_id == team_id)
+            stmt = stmt.where(or_(
+                Event.owner_user_id.in_(team_users),
+                exists(select(1).where(EventAttendee.event_id == Event.id, EventAttendee.status == "accepted",
+                                       EventAttendee.user_id.in_(team_users))),
+            ))
         if keyword:
             stmt = stmt.where(
-                or_(Event.owner_user_id == viewer.id, Event.visibility == "team_detail"),
+                or_(Event.owner_user_id == viewer.id, _attends(viewer.id), Event.visibility == "team_detail"),
                 Event.title.ilike(f"%{_escape_like(keyword)}%", escape="\\"),
             )
         # 全天行程以日期 00:00（UTC）近似排序；同一天內排在非全天之前
         stmt = stmt.order_by(Event.start_date.is_(None), Event.start_date, Event.start_at, Event.id)
         rows = (await session.execute(stmt.offset(offset).limit(limit + 1))).all()
-        items = [_view(ev, name, viewer) for ev, name in rows[:limit]]
+        attendees = await _attendees_of(session, [ev.id for ev, _ in rows[:limit]])
+        items = [_view(ev, name, viewer, attendees.get(ev.id, ())) for ev, name in rows[:limit]]
         return EventPage(items=items, has_more=len(rows) > limit)
 
     async def get_visible(self, session: AsyncSession, viewer: User, event_id: uuid.UUID) -> EventView:
@@ -157,4 +192,15 @@ class EventQueryService:
         ).first()
         if row is None:
             raise NotFound("event not found")  # 看不到與不存在一律 404
-        return _view(row[0], row[1], viewer)
+        attendees = await _attendees_of(session, [row[0].id])
+        return _view(row[0], row[1], viewer, attendees.get(row[0].id, ()))
+
+    async def decline(self, session: AsyncSession, viewer: User, event_id: uuid.UUID, *, now: datetime) -> None:
+        """受邀者退出（不參加）；主辦人的行程不受影響。"""
+        row = await session.scalar(select(EventAttendee).where(
+            EventAttendee.event_id == event_id, EventAttendee.user_id == viewer.id,
+            EventAttendee.organization_id == viewer.organization_id, EventAttendee.status == "accepted"))
+        if row is None:
+            raise NotFound("not invited to this event")
+        row.status = "declined"
+        await session.flush()

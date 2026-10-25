@@ -30,6 +30,12 @@ export interface Member {
   teams: Team[];
 }
 
+export interface Recurrence {
+  freq: "weekly";
+  weekdays: number[]; // 0=週一 … 6=週日
+  until: string; // YYYY-MM-DD，含當日
+}
+
 export interface DraftFields {
   title: string | null;
   start_local: string | null;
@@ -38,6 +44,9 @@ export interface DraftFields {
   location: string | null;
   notes: string | null;
   visibility: Visibility | null;
+  recurrence: Recurrence | null;
+  attendee_ids: string[] | null;
+  scope: "single" | "following" | null;
 }
 
 export interface EventDetail {
@@ -53,6 +62,7 @@ export interface EventDetail {
   visibility: Visibility;
   status: "active" | "cancelled";
   version: number;
+  series: boolean;
 }
 
 export interface Draft {
@@ -82,6 +92,9 @@ export interface EventItem {
   location: string | null;
   notes: string | null;
   visibility: Visibility | null;
+  role: "owner" | "attendee" | "viewer";
+  series: boolean;
+  attendees: { id: string; name: string }[];
 }
 
 export interface EventPage {
@@ -93,6 +106,7 @@ export interface EventPage {
 export interface ConfirmResult {
   intent: Draft["intent"];
   already_committed: boolean;
+  affected: number;
   event: EventDetail;
 }
 
@@ -143,8 +157,9 @@ export const api = {
     request<ConfirmResult>("POST", `/api/drafts/${id}/confirm`, { draft_version: version }),
   abandonDraft: (id: string, version: number) =>
     request<{ status: string }>("POST", `/api/drafts/${id}/abandon`, { draft_version: version }),
-  newDraft: (intent: Draft["intent"], eventId?: string) =>
-    request<Draft>("POST", "/api/events/drafts", { intent, fields: {}, event_id: eventId ?? null }),
+  newDraft: (intent: Draft["intent"], eventId?: string, fields: Partial<DraftFields> = {}) =>
+    request<Draft>("POST", "/api/events/drafts", { intent, fields, event_id: eventId ?? null }),
+  decline: (eventId: string) => request<{ status: string }>("POST", `/api/events/${eventId}/decline`),
   events: (params: { start: string; end: string; memberId?: string; teamId?: string; offset?: number }) => {
     const q = new URLSearchParams({ start_date: params.start, end_date: params.end });
     if (params.memberId) q.append("member_id", params.memberId);
