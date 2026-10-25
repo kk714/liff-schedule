@@ -6,7 +6,7 @@
     organizations ─┬─ users ─┬─ external_identities（LINE 綁定）
                    │         ├─ sessions／invitations／organization_roles
                    │         ├─ events ◀── event_drafts ◀── conversation_sessions.pending_draft_id
-                   │         └─ async_jobs（Worker 佇列，欄位與 app/worker/postgres.py 一致）
+                   │         └─ async_jobs（Worker 佇列，見 app/worker/sqlite_queue.py）
                    └─ teams ─── team_members
     inbound_events（webhook 去重）、message_outbox、idempotency_keys、audit_logs、llm_call_logs
 """
@@ -242,7 +242,7 @@ class InboundEvent(UUIDPrimaryKey, Base):
 
 
 class AsyncJob(UUIDPrimaryKey, Timestamps, Base):
-    """Worker 佇列。對話工作的欄位必須與 app/worker/postgres.py 的 SQL 一致。"""
+    """Worker 佇列（app/worker/sqlite_queue.py）。"""
 
     __tablename__ = "async_jobs"
     __table_args__ = (

@@ -2,8 +2,8 @@
 
 連線字串來源（依序）：程式傳入的 config.attributes["connection"]（測試用）、
 alembic.ini 的 sqlalchemy.url（-x 或程式設定）、環境變數 DATABASE_URL。
-支援同步（sqlite://、postgresql+psycopg）與非同步（postgresql+asyncpg）驅動；
-離線模式（alembic upgrade head --sql）只產生 SQL，不連線。
+支援同步（sqlite://）與非同步（sqlite+aiosqlite://）驅動；離線模式（--sql）只產生 SQL，不連線。
+刻意不套用 app.db.engine 的 PRAGMA：SQLite batch migration 重建資料表時，外鍵檢查必須關閉。
 """
 
 from __future__ import annotations

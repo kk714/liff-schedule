@@ -1,0 +1,2 @@
+# shell 腳本在 Linux 容器內執行，必須維持 LF
+*.sh text eol=lf

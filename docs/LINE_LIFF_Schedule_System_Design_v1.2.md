@@ -5,6 +5,7 @@
 - 使用情境：使用者直接在 LINE 對話輸入，經 NOVARK LLM 解析成行程草稿，確認後存入系統，再以對話或 LIFF 查詢。
 - v1.2 變更（2026-10-24 CEO 審查決策）：v1 聚焦「LINE 對話 → NOVARK LLM → 行程」。Google、Apple iCloud、Microsoft Outlook 行事曆讀取及共用的 ICS 匯入流程改列 TODO（見 `TODOS.md` 與附錄 A），不在 v1 實作範圍。
 - v1.2 補充決策（2026-10-25）：Reply 優先與 Push 額度策略（§10）、團隊可見性追溯與停權隱藏（§7.1）、跨年日期推定（§6）、稽核紀錄只存欄位名（§8）、NL 解析評測集與門檻（§14.1）、邀請兌換確認與重綁（§4.3）；NOVARK 實際 API 契約、input_guard 規則與錯誤對應（§3.1.1–3.1.3）。Eng review（2026-10-25）：移除 PydanticAI 與 LIFF 對話輸入、Reply 截止時間與 Worker 並行（§10-4）、guardrail 退路（§3.1.2）、offset 正規化（§3.1.1）、「這週X」與非文字訊息規則（§6）、測試策略（§14.2）。
+- SQLite 決策（2026-10-25）：資料量小，正式環境改用專案內的 SQLite，與服務一起部署為單一 Docker image（資料檔案放在掛載的 volume）；取代原本的 PostgreSQL（§2、§8、§10、§12、§14.2）。
 - v1.1 變更：新增選用式行事曆讀取、逐筆勾選匯入、連線管理、來源追蹤及匯入防重（v1.2 起移至附錄 A，延後實作）。
 - 設計原則：LIFF 與官方帳號共用業務後端；NOVARK 僅供應 LLM 能力；行程、權限、確認與寫入由本系統負責。
 
@@ -61,7 +62,7 @@ flowchart TD
   JOB --> RULE["結構驗證、權限與確認"]
   JOB --> AD["NOVARK LLM Adapter"]
   AD --> NOV["NOVARK LLM Service"]
-  RULE --> DB["PostgreSQL"]
+  RULE --> DB["SQLite（/data volume）"]
   JOB --> OUT["LINE 回覆／LIFF 結果"]
 ```
 
@@ -75,7 +76,7 @@ flowchart TD
 | NOVARK Adapter | 封裝端點、Service Token、請求與回應格式、逾時及錯誤轉換 |
 | 規則服務 | 日期、欄位、分享範圍、目標事件與狀態檢查 |
 | 背景工作 | Webhook 非同步處理、LLM 呼叫與訊息發送 |
-| PostgreSQL | 正式行程、草稿、對話狀態、工作佇列、操作紀錄 |
+| SQLite | 正式行程、草稿、對話狀態、工作佇列、操作紀錄；單一檔案放在掛載的 volume（§12） |
 
 建議 Python＋FastAPI＋Pydantic＋SQLAlchemy／Alembic，前端 React＋TypeScript＋LIFF SDK。NOVARK 為自訂 Agent 端點（§3.1.1），不使用 PydanticAI 等模型框架；Adapter 以 httpx（非同步、共用連線池）＋Pydantic 結構驗證實作。第一版不依賴 NOVARK 的工具呼叫或 Agent 能力。
 
@@ -289,7 +290,7 @@ stateDiagram-v2
 
 **分工**：「未提供年份」與「這週X已過」兩條規則由後端判斷（`backend/app/rules/dates.py`），只套用在新增行程。模型照字面解析：沒寫年份一律用今年，「這週X」一律取本週那天；是否改成明年、是否追問，都由後端決定。2026-10-25 評測發現模型不會可靠地標示這兩種歧義，所以改由後端處理。星期推算同樣不交給模型算：system prompt 附上本週到下下週的日期對照表，讓模型查表。
 
-非全天資料以 PostgreSQL timestamptz 儲存時間瞬間，另存 IANA timezone；API 回傳含 offset 的 ISO 8601。全天以 date 儲存，區間採 [start_date, end_date)。非全天區間查詢採 start_at < query_end AND end_at > query_start。
+非全天資料以 UTC 儲存時間瞬間（`UTCDateTime`），另存 IANA timezone；API 回傳含 offset 的 ISO 8601。全天以 date 儲存，區間採 [start_date, end_date)。非全天區間查詢採 start_at < query_end AND end_at > query_start。
 
 ## 7. 查詢與分享權限
 
@@ -353,7 +354,7 @@ stateDiagram-v2
 
 **實作（2026-10-25）**：`backend/app/db/models.py`，migration 為 `backend/migrations/versions/0001_initial_schema.py`。和上表相比的細節：
 - 組織一致性在資料庫層強制：users、teams 另有 `(organization_id, id)` 唯一鍵；team_members、organization_roles、invitations、events、event_drafts、conversation_sessions 都用複合外鍵 `(organization_id, user_id)`。即使持有正確的 UUID，跨組織的資料也寫不進去。
-- 列舉存成 VARCHAR＋CHECK，不用 PostgreSQL 原生 ENUM，之後新增值不必改型別；JSON 欄位在 PostgreSQL 上為 JSONB。
+- 列舉存成 VARCHAR＋CHECK，之後新增值不必改型別。模型保留 PostgreSQL 變體（JSONB），日後要換資料庫時不必重寫。
 - external_identities 另加 `(user_id, provider)` 唯一鍵，一位成員只綁一個 LINE。撤銷綁定時刪除該列，並寫入稽核紀錄。
 - invitations 加 `revoked_at`、`created_by_user_id`；event_drafts 加 `organization_id`，並以 CHECK 規定修改／取消草稿必須指定 event_id。
 - async_jobs 加上對話工作欄位：`user_id`、`line_user_id`、`message_text`、`reply_token`、`reply_deadline`、`received_at`、`inbound_event_id`，和 Worker 的 SQL 一致。
@@ -367,8 +368,7 @@ stateDiagram-v2
 - 全天：start_date／end_date 必填、end_date > start_date，時間欄位為空。
 - owner_user_id 與關聯資料必須同組織；跨組織請求即使持有 UUID 仍拒絕。
 - 建立 organization_id＋owner_user_id＋start_at 索引；全天另建日期索引。
-- 規模增加時評估時間區間 GiST 索引；第一版先依實際查詢量調整。
-- 草稿只允許提交一次，正式行程與草稿使用交易及列鎖確保一致性。
+- 草稿只允許提交一次。SQLite 以 `BEGIN IMMEDIATE` 開始每個交易，寫入交易彼此序列化，確認時「讀取→檢查→寫入」不會互相穿插（取代列鎖；有並行測試保護）。
 
 ## 9. API 設計
 
@@ -427,8 +427,8 @@ Worker 處理 LINE 訊息後產生的內部結果格式，用來組裝 LINE 回�
 
 1. 使用未修改的原始 request body 與 Channel Secret 驗證 x-line-signature，驗證成功後才解析與處理事件。
 2. 以 channel_id＋webhookEventId 去重，將事件及工作可靠寫入 DB 後，立即回應 2xx；不可先回 2xx 再嘗試寫入。
-3. 背景 Worker 以租約／列鎖領取工作，支援失敗重試；處理空 events 的驗證請求。
-4. 同一使用者的對話工作依序執行（以 PostgreSQL advisory lock，鍵為 user_id）；跨使用者並行。Worker 使用非同步 httpx，並行數可配置（`WORKER_CONCURRENCY`，**預設 2**；原訂 8，因 NOVARK 實測同時 4 個請求即回 429 而下修）。
+3. 背景 Worker 以租約領取工作（單一 `UPDATE … RETURNING`），支援失敗重試；處理空 events 的驗證請求。
+4. 同一使用者的對話工作依序執行（單一程序部署，以程序內的使用者鎖保證）；跨使用者並行。Worker 使用非同步 httpx，並行數可配置（`WORKER_CONCURRENCY`，**預設 2**；原訂 8，因 NOVARK 實測同時 4 個請求即回 429 而下修）。
    - 實作：`backend/app/worker/`。鎖被占用時工作放回佇列（延遲 0.5 秒），不算一次嘗試；佇列依 received_at 領取，以保持同一使用者的訊息順序。
    - Reply 可用時間預設 30 秒（`DEFAULT_REPLY_WINDOW_SECONDS`，保守值，依實測調整）；NOVARK 最低預算 8 秒、Reply 安全邊際 2 秒。
    - 背景完成的結果預設**不 Push**（`push_late_results=false`），使用者從「處理較久」訊息裡的 LIFF 連結查看；「處理較久」通知本身也不會改用 Push。
@@ -459,8 +459,12 @@ Worker 處理 LINE 訊息後產生的內部結果格式，用來組裝 LINE 回�
 
 ## 12. 部署與維運
 
-- 建議一個專案包含 frontend、backend、worker、migrations、deploy，前後端經 Nginx／反向代理使用同網域 HTTPS。
-- PostgreSQL 保存業務資料與持久工作；初期可用 DB 工作佇列，未來需要更高吞吐量再加入 Redis／專用 Queue。
+- 建議一個專案包含 frontend、backend、migrations、deploy，前後端經反向代理使用同網域 HTTPS。
+- **資料庫：SQLite（2026-10-25 決策，資料量小）**。部署為一個 Docker image（`backend/Dockerfile`）：
+  - image 只包含程式與 migration；資料庫檔案放在 `/data/app.db`，**必須掛載 volume**，否則重新部署資料會消失。容器啟動時自動執行 `alembic upgrade head`。
+  - **只能一個實例、一個程序**（`uvicorn --workers 1`）。Worker 以背景工作跑在同一程序內；工作佇列存在資料庫裡，所以重啟不會遺失工作。不能水平擴充。
+  - WAL、`busy_timeout=5000`、外鍵檢查在每條連線開啟（`backend/app/db/engine.py`）。
+  - 備份：每日以 SQLite online backup（`sqlite3 app.db ".backup ..."` 或 Litestream）複製到 volume 以外的位置；不可直接複製正在寫入的檔案。
 - API 與 Worker 分別運行，不能以 API process 內的臨時背景執行緒作可靠佇列。
 - 僅開放必要的前端、API 與 Webhook；DB 不暴露外網，後端能連到 NOVARK 與 LINE API。
 - 分開開發／測試／正式環境的 LINE Channel、DB、NOVARK Service Token。
@@ -523,10 +527,8 @@ Worker 處理 LINE 訊息後產生的內部結果格式，用來組裝 LINE 回�
 ### 14.2 測試策略
 
 - 後端：pytest＋pytest-asyncio，測試資料庫使用 **SQLite**（2026-10-25 eng review D8 決策，換取速度與簡單）。NOVARK 以 respx 錄放回應。前端：Vitest；LIFF：Playwright 冒煙測試。
-- **SQLite 測不到的行為**（列鎖 `SELECT … FOR UPDATE`、advisory lock、timestamptz 時區語意、PostgreSQL 唯一約束與交易隔離）：
-  - 這些路徑的單元測試以介面替身驗證呼叫順序，**不得視為已驗證並行正確性**。
-  - 以下驗收必須在 PostgreSQL 的測試／預備環境手動或以腳本執行，上線前全部通過：A06（重送與連點）、A07（舊卡與雙端修改）、同一使用者工作序列化、A13（跨日與時區邊界）。
-- **升級條件**：任一並行或時區相關缺陷進入正式環境，或 CI 需要自動驗證上述行為時，改用 PostgreSQL（testcontainers）作為後端測試資料庫。
+- 正式環境改用 SQLite 後，測試與上線是同一種資料庫，D8 原本的限制已不存在。並行情境（A06 連點確認、A07 兩份草稿同時修改同一筆行程、佇列不重複領取）在檔案型 SQLite 上以兩條連線實測。
+- 仍需人工驗收：容器重建後 volume 資料保留、備份與還原演練。
 
 ## 15. 開發順序與待確認事項
 

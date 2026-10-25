@@ -1,8 +1,4 @@
-"""資料模型與 migration 測試（SQLite，D8）。
-
-PostgreSQL 專屬行為（列鎖、advisory lock、SKIP LOCKED、timestamptz 時區語意）不在此驗證，
-須於 PostgreSQL 環境驗收（設計文件 §14.2、T4）；這裡另以離線模式確認 migration 產生的 PostgreSQL DDL。
-"""
+"""資料模型與 migration 測試。正式環境即為 SQLite（設計文件 §12），測試與上線使用同一種資料庫。"""
 
 from __future__ import annotations
 
@@ -80,20 +76,9 @@ def test_downgrade_removes_everything(migrated):
     assert set(inspect(migrated).get_table_names()) <= {"alembic_version"}
 
 
-def test_postgres_offline_sql_uses_native_types():
-    out = io.StringIO()
-    command.upgrade(alembic_config("postgresql+asyncpg://u:p@localhost/db", sql_buffer=out), "head", sql=True)
-    sql = out.getvalue()
-    assert "TIMESTAMP WITH TIME ZONE" in sql
-    assert "JSONB" in sql
-    assert "UUID" in sql
-    assert "CONSTRAINT ck_events_time_shape CHECK" in sql
-    assert "FOREIGN KEY(organization_id, owner_user_id) REFERENCES users (organization_id, id)" in sql
-
-
 def test_async_jobs_has_columns_used_by_worker_sql(migrated):
     cols = {c["name"] for c in inspect(migrated).get_columns("async_jobs")}
-    # app/worker/postgres.py 的 SQL 依賴這些欄位
+    # app/worker/sqlite_queue.py 依賴這些欄位
     assert {"id", "type", "status", "user_id", "line_user_id", "message_text", "reply_token",
             "reply_deadline", "received_at", "attempts", "available_at", "locked_until",
             "last_error"} <= cols

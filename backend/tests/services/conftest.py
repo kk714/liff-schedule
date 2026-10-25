@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import Base
+from app.db.engine import create_engine, session_factory
 from app.db.models import Organization, Team, TeamMember, User
 
 NOW = datetime(2026, 10, 21, 2, 0, tzinfo=timezone.utc)  # 台北 10:00（週三）
@@ -25,18 +25,19 @@ class World:
 
 
 @pytest.fixture
-async def session():
-    engine = create_async_engine("sqlite+aiosqlite://")
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _fk_on(dbapi_conn, _):
-        dbapi_conn.execute("PRAGMA foreign_keys=ON")
-
-    async with engine.begin() as conn:
+async def engine(tmp_path):
+    """與正式環境相同的設定：檔案型 SQLite、WAL、外鍵、BEGIN IMMEDIATE。"""
+    eng = create_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as s:
+    yield eng
+    await eng.dispose()
+
+
+@pytest.fixture
+async def session(engine):
+    async with session_factory(engine)() as s:
         yield s
-    await engine.dispose()
 
 
 @pytest.fixture
