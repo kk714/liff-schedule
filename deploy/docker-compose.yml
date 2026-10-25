@@ -1,0 +1,50 @@
+# 部署在 GCE 104.199.191.170 的 /opt/liff-schedule。
+#
+#   Cloudflare（liff.b856dev.com）
+#     → 主機共用的對外 nginx（:443，*.b856dev.com 憑證）── 只多一個 server 區塊，見 edge/
+#       → liff-nginx（本專案自己的 nginx，只接 dockernet，不對外開 port）
+#         → app（FastAPI＋Worker＋LIFF 前端，單一程序；SQLite 在 liff-data volume）
+#   backup：每日以 SQLite backup API 備份到 ./backups（保留 14 份）
+#
+# 不使用、也不碰 NOVARK 的 novark-nginx。
+name: liff-schedule
+
+services:
+  app:
+    image: liff-schedule:${TAG:-latest}
+    container_name: liff-app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - liff-data:/data
+    networks: [liff-internal]
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: liff-nginx
+    restart: unless-stopped
+    depends_on: [app]
+    volumes:
+      - ./nginx/liff.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [liff-internal, dockernet]
+
+  backup:
+    image: liff-schedule:${TAG:-latest}
+    container_name: liff-backup
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "app.backup", "--interval-hours", "24"]
+    environment:
+      BACKUP_DIR: /backups
+      BACKUP_KEEP: "14"
+    volumes:
+      - liff-data:/data:ro
+      - ./backups:/backups
+    networks: [liff-internal]
+
+volumes:
+  liff-data:
+
+networks:
+  liff-internal:
+  dockernet:
+    external: true  # 主機共用對外 nginx 所在的網路
