@@ -45,11 +45,13 @@ export function EventList({
                 <li key={e.id} className={`event ${e.projection === "busy" ? "event-busy" : ""}`}>
                   <span className="event-time">{timeText(e)}</span>
                   <span className="event-main">
-                    {showOwner && <span className="event-owner">{e.mine ? "我" : e.owner_name}</span>}
+                    {showOwner && <span className="event-owner">{e.owner_name}</span>}
                     <span className="event-title">{e.projection === "busy" ? "忙碌" : e.title}</span>
                     {multiDayNote(e) && <span className="event-meta">{multiDayNote(e)}</span>}
                     {e.location && <span className="event-meta">{e.location}</span>}
-                    {e.mine && e.visibility && <span className="event-meta">{VISIBILITY_LABEL[e.visibility]}</span>}
+                    {e.mine && e.visibility && e.visibility !== "team_detail" && (
+                      <span className="event-meta">{VISIBILITY_LABEL[e.visibility]}</span>
+                    )}
                   </span>
                   {actions && <span className="event-actions">{actions(e)}</span>}
                 </li>

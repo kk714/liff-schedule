@@ -23,6 +23,13 @@ export interface Team {
   name: string;
 }
 
+export interface Member {
+  id: string;
+  display_name: string;
+  me: boolean;
+  teams: Team[];
+}
+
 export interface DraftFields {
   title: string | null;
   start_local: string | null;
@@ -127,6 +134,8 @@ export const api = {
       "POST", "/api/invitations/preview", { token }),
   redeemInvitation: (token: string, idToken: string) =>
     request<{ bound: boolean; user: User }>("POST", "/api/invitations/redeem", { token, id_token: idToken }),
+  members: (teamId?: string) =>
+    request<{ members: Member[] }>("GET", teamId ? `/api/members?team_id=${teamId}` : "/api/members"),
   draft: (id: string) => request<Draft>("GET", `/api/drafts/${id}`),
   patchDraft: (id: string, version: number, fields: Partial<DraftFields>) =>
     request<Draft>("PATCH", `/api/drafts/${id}`, { draft_version: version, fields }),

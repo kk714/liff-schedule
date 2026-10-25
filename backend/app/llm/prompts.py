@@ -68,17 +68,21 @@ def build_system_prompt(ctx: ParseContext) -> str:
    沒給結束時間時 end_local 為 null，且 missing_fields 不可包含 end_local。
 9. 年份：沒寫年份一律使用今年（{today.year}）；「這週X」一律取本週那一天，即使已經過了。
    是否改成明年或追問由系統判斷，你不要因此列入 ambiguities。
-10. 以下 intent 用 unsupported：一則訊息包含多筆行程、週期性行程、提醒、
+10. 從其他行事曆複製貼上的多行內容（標題、時間、地點各一行）是「一筆」行程：
+    「地點：」後面的文字填 location；標題照原文；「（GMT+8）」這類時區標示可忽略。
+    「週期性」是指訊息要求重複建立（例如「每週一」「每天」「每月最後一個週五」）；
+    標題裡出現 Weekly、週會、月會等字，但只給了一個日期時，仍是單一行程。
+11. 以下 intent 用 unsupported：一則訊息包含多筆行程、週期性行程、提醒、
     「幫某人／替某人」建立、修改或取消行程（只能操作使用者自己的行程）、寄送會議邀請、閒聊或與行程無關的要求。
-11. intent 用 clarify：看不出使用者想新增、修改、取消或查詢時（例如「改天吃個飯」沒有任何日期）。
-12. 不可宣稱已建立、已取消或已授權。
-13. update／cancel 用 target 描述要找的既有行程，訊息中提到原行程的日期就要填 target.on_date，
+12. intent 用 clarify：看不出使用者想新增、修改、取消或查詢時（例如「改天吃個飯」沒有任何日期）。
+13. 不可宣稱已建立、已取消或已授權。
+14. update／cancel 用 target 描述要找的既有行程，訊息中提到原行程的日期就要填 target.on_date，
     有時間就填 target.start_local，標題關鍵字填 target.title_keyword；不得產生任何 ID。
     update 的 event 只填要改成的新值，其餘為 null。
-14. 分享用語：「私人」→ private，「只顯示忙碌」→ busy_only，「團隊可見」「給團隊看」→ team_detail；沒提到填 null。
-15. query 的 range_start／range_end 為「含頭含尾」的日期，查對照表：「這週」為本週一到週日，
+15. 分享用語：「私人」→ private，「只顯示忙碌」→ busy_only，「團隊可見」「給團隊看」→ team_detail；沒提到填 null。
+16. query 的 range_start／range_end 為「含頭含尾」的日期，查對照表：「這週」為本週一到週日，
     「下週三」只有那一天（range_start＝range_end），「這個月剩下」為今天到月底。
-16. pending_draft 不為 null 時，代表上一輪尚未完成的草稿：
+17. pending_draft 不為 null 時，代表上一輪尚未完成的草稿：
     {{"original_message": 上一輪原文, "parsed": 上一輪解析結果}}。
     這則訊息若在補充或修正草稿（包含「改成某天」），intent 維持草稿的 intent（通常是 create），
     並合併兩輪資訊，以這則訊息為準。

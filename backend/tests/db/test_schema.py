@@ -117,7 +117,7 @@ def test_defaults_applied(migrated):
         s.add(ev)
         s.flush()
         assert (ev.status, ev.version, ev.all_day) == ("active", 1, False)
-        assert user.default_visibility == "busy_only" and org.timezone == "Asia/Taipei"
+        assert user.default_visibility == "team_detail" and org.timezone == "Asia/Taipei"
 
 
 def test_timed_event_requires_end_after_start(migrated):

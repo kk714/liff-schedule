@@ -169,20 +169,70 @@ describe("draft page", () => {
 });
 
 describe("team page", () => {
-  test("busy items show 忙碌 and the owner, never a title", async () => {
+  const MEMBERS = {
+    members: [
+      { id: "u1", display_name: "Kyle", me: true, teams: [] },
+      { id: "u2", display_name: "李經理", me: false, teams: [] },
+      { id: "u3", display_name: "王小明", me: false, teams: [] },
+    ],
+  };
+  const ev = (over: object) => ({
+    id: "e", owner_user_id: "u1", owner_name: "Kyle", mine: true, projection: "detail", all_day: false,
+    start_local: "2026-10-27T11:30:00", end_local: "2026-10-27T14:00:00", start_date: null, end_date: null,
+    title: "B216 組織調整及未來規劃說明", location: "宏匯大樓 8樓會議室", notes: null, visibility: "team_detail", ...over,
+  });
+
+  test("day timeline: one column per member by system name, titles only, busy as 忙碌", async () => {
     at("/team");
     mockApi({
-      "GET /api/config": CONFIG, "GET /api/me": ME,
+      "GET /api/config": CONFIG, "GET /api/me": ME, "GET /api/members": MEMBERS,
       "GET /api/events": {
-        items: [{ id: "e9", owner_user_id: "u2", owner_name: "李經理", mine: false, projection: "busy", all_day: false,
-                  start_local: "2026-10-22T14:00:00", end_local: "2026-10-22T15:00:00", start_date: null, end_date: null,
-                  title: null, location: null, notes: null, visibility: null }],
+        items: [
+          ev({ id: "e1" }),
+          ev({ id: "e2", owner_user_id: "u2", owner_name: "李經理", mine: false, projection: "busy", title: null,
+               location: null, start_local: "2026-10-27T15:00:00", end_local: "2026-10-27T16:00:00" }),
+        ],
         has_more: false, next_offset: null,
       },
     });
     render(<App liffFactory={async () => fakeLiff()} />);
-    expect(await screen.findByText("李經理")).toBeInTheDocument();
+    expect(await screen.findByText("B216 組織調整及未來規劃說明")).toBeInTheDocument();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Kyle", "李經理", "王小明"]); // 沒有行程的人也有一欄，空檔一目了然
+    expect(screen.queryByText("我")).not.toBeInTheDocument();
     expect(screen.getByText("忙碌")).toBeInTheDocument();
-    expect(screen.getByText("14:00–15:00")).toBeInTheDocument();
+    expect(screen.queryByText("宏匯大樓 8樓會議室")).not.toBeInTheDocument(); // 只顯示會議名稱
+
+    const url = String(vi.mocked(fetch).mock.calls.find((c) => String(c[0]).startsWith("/api/events"))![0]);
+    const q = new URLSearchParams(url.split("?")[1]);
+    expect(q.get("start_date")).toBe(q.get("end_date")); // 一次只查一天
+  });
+
+  test("next day button moves the date", async () => {
+    at("/team");
+    mockApi({
+      "GET /api/config": CONFIG, "GET /api/me": ME, "GET /api/members": MEMBERS,
+      "GET /api/events": { items: [], has_more: false, next_offset: null },
+    });
+    render(<App liffFactory={async () => fakeLiff()} />);
+    await screen.findByText(/這天還沒有人登錄行程/);
+    await userEvent.click(screen.getByRole("button", { name: "後一天" }));
+    expect(await screen.findByRole("button", { name: "今天" })).toBeInTheDocument();
+  });
+});
+
+describe("new page", () => {
+  test("creates one blank draft and opens it", async () => {
+    at("/new");
+    const blank = { ...DRAFT, status: "collecting", missing_fields: ["title", "start_local"],
+                    fields: { ...DRAFT.fields, title: null, start_local: null, end_local: null } };
+    const calls = mockApi({
+      "GET /api/config": CONFIG, "GET /api/me": ME,
+      "POST /api/events/drafts": blank, "GET /api/drafts/d1": blank,
+    });
+    render(<App liffFactory={async () => fakeLiff()} />);
+    expect(await screen.findByRole("heading", { name: "新增行程" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.path === "/api/events/drafts")).toHaveLength(1);
+    expect(window.location.pathname).toBe("/drafts/d1");
   });
 });

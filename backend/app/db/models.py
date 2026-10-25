@@ -56,7 +56,7 @@ class User(UUIDPrimaryKey, Timestamps, Base):
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Taipei")
     status: Mapped[str] = mapped_column(str_enum("user_status", "active", "suspended", "left"), default="active")
     default_visibility: Mapped[str] = mapped_column(str_enum("user_default_visibility", *VISIBILITY),
-                                                    default="busy_only")
+                                                    default="team_detail")  # 2026-10-25：預設讓團隊看見行程
 
 
 class ExternalIdentity(UUIDPrimaryKey, Timestamps, Base):

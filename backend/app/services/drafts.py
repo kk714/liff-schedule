@@ -103,8 +103,8 @@ def _resolve_create(fields: DraftFields, user: User) -> tuple[dict[str, Any], li
         data["end_local"] = data["start_local"] + DEFAULT_DURATION
         defaults.append("duration_minutes=60")
     if data["visibility"] is None:
+        # 分享範圍不需使用者選擇，直接套用成員預設（預設 team_detail），不列入提示
         data["visibility"] = user.default_visibility
-        defaults.append(f"visibility={user.default_visibility}")
     if data["start_local"] and data["end_local"] and data["end_local"] <= data["start_local"]:
         missing.append("end_local")  # 結束早於開始：阻擋並追問（§6）
     return data, defaults, missing

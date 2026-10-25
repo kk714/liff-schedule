@@ -110,3 +110,33 @@ button.more { width: 100%; margin-top: 12px; }
 
 .scope-note { margin-top: 16px; text-align: center; color: var(--muted); font-size: 0.8rem; }
 .bind h1 { font-size: 1.4rem; }
+
+/* 團隊單日時間軸 */
+.day-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.day-nav > button:not(.small) { width: 44px; padding: 0; font-size: 1.3rem; }
+.day-picker { flex: 1; position: relative; text-align: center; font-weight: 700; min-height: 44px;
+  display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.day-picker input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.timeline-scroll { overflow-x: auto; background: var(--card); border-radius: 12px; -webkit-overflow-scrolling: touch; }
+.timeline { display: grid; min-width: 100%; }
+.tl-corner, .tl-name { position: sticky; top: 0; background: var(--card); z-index: 2; }
+.tl-corner { left: 0; z-index: 3; }
+.tl-name { padding: 10px 4px; text-align: center; font-weight: 700; font-size: 0.9rem; border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-allday-label { position: sticky; left: 0; background: var(--card); font-size: 0.75rem; color: var(--muted);
+  padding: 6px 2px; z-index: 1; border-bottom: 1px solid var(--line); }
+.tl-allday { border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px; display: flex; flex-direction: column; gap: 4px; }
+.tl-chip { background: #e6f7ee; color: #035b2a; border-radius: 6px; padding: 2px 6px; font-size: 0.8rem; overflow-wrap: anywhere; }
+.tl-hours { position: sticky; left: 0; background: var(--card); z-index: 1; }
+.tl-hours span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 0.7rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.tl-hours span:first-child { transform: none; }
+.tl-col { position: relative; border-left: 1px solid var(--line);
+  background-image: linear-gradient(to bottom, var(--line) 1px, transparent 1px); }
+.tl-event { position: absolute; padding: 3px 5px; border-radius: 6px; background: #d9f5e5; border-left: 3px solid var(--green);
+  overflow: hidden; display: flex; flex-direction: column; font-size: 0.78rem; line-height: 1.25; box-sizing: border-box; }
+.tl-event.busy { background: #eef0f2; border-left-color: #9aa1a9; color: var(--muted); }
+.tl-event-title { font-weight: 700; overflow-wrap: anywhere; }
+.tl-event-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-now { position: absolute; left: 0; right: 0; height: 2px; background: #e53935; z-index: 1; }
+.center { text-align: center; margin-top: 12px; }

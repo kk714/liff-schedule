@@ -54,7 +54,7 @@ function fieldsFrom(form: Form): Partial<DraftFields> {
     all_day: form.allDay,
     location: form.location.trim() || null,
     notes: form.notes.trim() || null,
-    visibility: form.visibility,
+    // 分享範圍不由表單決定：新增時沿用成員預設（團隊可見），修改時維持原設定
   };
 }
 
@@ -218,15 +218,7 @@ export function DraftPage() {
             備註
             <textarea value={form.notes} maxLength={1000} rows={3} onChange={(e) => set("notes", e.target.value)} />
           </label>
-          <label>
-            分享範圍
-            <select value={form.visibility} onChange={(e) => set("visibility", e.target.value as Visibility)}>
-              <option value="private">私人（只有自己看得到）</option>
-              <option value="busy_only">僅顯示忙碌（團隊看得到時段）</option>
-              <option value="team_detail">團隊可見詳細（標題、地點、備註）</option>
-            </select>
-          </label>
-          <p className="hint">分享對象為目前的團隊成員，包含日後加入的人。</p>
+          <p className="hint">行程會讓團隊成員看到（標題、時間、地點），方便大家安排會議。</p>
         </form>
       )}
 

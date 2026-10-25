@@ -43,14 +43,14 @@ async def test_a02_create_applies_defaults_and_stores_utc(session, world):
 
     assert draft.status == "awaiting_confirmation"
     assert draft.payload_json["end_local"] == "2026-11-01T15:00:00"
-    assert draft.payload_json["defaults_applied"] == ["duration_minutes=60", "visibility=busy_only"]
+    assert draft.payload_json["defaults_applied"] == ["duration_minutes=60"]
     assert await count_events(session) == 0  # 未確認前沒有正式行程
 
     result = await svc.confirm(session, world.me, draft.id, 1, now=NOW, request_id="req-1")
     ev = result.event
     assert ev.start_at == datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc)
     assert ev.end_at == datetime(2026, 11, 1, 7, 0, tzinfo=timezone.utc)
-    assert (ev.visibility, ev.location, ev.version, ev.source) == ("busy_only", None, 1, "conversation")
+    assert (ev.visibility, ev.location, ev.version, ev.source) == ("team_detail", None, 1, "conversation")
     assert draft.status == "committed" and draft.committed_event_id == ev.id
 
     log = await session.scalar(select(AuditLog))

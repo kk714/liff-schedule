@@ -1,48 +1,48 @@
-// 團隊週曆：手機以清單為主（§11）。權限由後端套用，這裡只負責顯示「忙碌」或詳情。
+// 團隊行程：一天一天看，以時間軸呈現每位成員的行程，方便找出大家都有空的時段。
+// 權限由後端套用：本人與團隊可見的行程顯示標題，「僅忙碌」只顯示忙碌。
 import { useEffect, useState } from "react";
 
 import { useApp } from "../App";
-import { api, errorMessage, type EventItem } from "../api";
-import { EventList, SCOPE_NOTE } from "../components/EventList";
+import { api, errorMessage, type EventItem, type Member } from "../api";
+import { DayTimeline } from "../components/DayTimeline";
+import { SCOPE_NOTE } from "../components/EventList";
 import { Status } from "../components/Status";
-import { addDays, dayLabel, todayIn, weekStart } from "../dates";
+import { addDays, dayLabel, todayIn } from "../dates";
+
+function nowMinutesIn(timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false })
+    .formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  return (get("hour") % 24) * 60 + get("minute");
+}
 
 export function TeamPage() {
   const { session } = useApp();
-  const [week, setWeek] = useState(() => weekStart(todayIn(session.user.timezone)));
+  const tz = session.user.timezone;
+  const today = todayIn(tz);
+  const [day, setDay] = useState(today);
   const [teamId, setTeamId] = useState<string>("");
+  const [members, setMembers] = useState<Member[] | null>(null);
   const [items, setItems] = useState<EventItem[] | null>(null);
-  const [offset, setOffset] = useState<number | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const end = addDays(week, 6);
 
   useEffect(() => {
     let cancelled = false;
     setItems(null);
     setError(null);
-    api
-      .events({ start: week, end, teamId: teamId || undefined })
-      .then((page) => {
+    Promise.all([api.members(teamId || undefined), api.events({ start: day, end: day, teamId: teamId || undefined })])
+      .then(([m, page]) => {
         if (cancelled) return;
+        setMembers(m.members);
         setItems(page.items);
-        setOffset(page.next_offset);
+        setTruncated(page.has_more);
       })
       .catch((err) => !cancelled && setError(errorMessage(err)));
     return () => {
       cancelled = true;
     };
-  }, [week, end, teamId]);
-
-  async function loadMore() {
-    if (offset === null || items === null) return;
-    try {
-      const page = await api.events({ start: week, end, teamId: teamId || undefined, offset });
-      setItems([...items, ...page.items]);
-      setOffset(page.next_offset);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }
+  }, [day, teamId]);
 
   return (
     <div>
@@ -55,21 +55,28 @@ export function TeamPage() {
           </select>
         )}
       </header>
-      <div className="week-nav">
-        <button aria-label="上一週" onClick={() => setWeek(addDays(week, -7))}>‹</button>
-        <span>{dayLabel(week)}–{dayLabel(end)}</span>
-        <button aria-label="下一週" onClick={() => setWeek(addDays(week, 7))}>›</button>
+      <div className="day-nav">
+        <button aria-label="前一天" onClick={() => setDay(addDays(day, -1))}>‹</button>
+        <label className="day-picker">
+          <span>{dayLabel(day)}{day === today ? "・今天" : ""}</span>
+          <input type="date" aria-label="選擇日期" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+        </label>
+        <button aria-label="後一天" onClick={() => setDay(addDays(day, 1))}>›</button>
+        {day !== today && <button className="small" onClick={() => setDay(today)}>今天</button>}
       </div>
+
       {session.teams.length === 0 && (
-        <Status kind="empty" title="您還沒有加入任何團隊" message="加入團隊後，就能看到同事的忙碌時段。請聯絡管理員。" />
+        <Status kind="empty" title="您還沒有加入任何團隊" message="加入團隊後，就能在這裡看到大家的行程。請聯絡管理員。" />
       )}
       {error && <p className="alert" role="alert">{error}</p>}
-      {items === null && !error && <Status kind="loading" />}
-      {items !== null && items.length === 0 && session.teams.length > 0 && (
-        <Status kind="empty" title="這週沒有已登錄的行程" message="沒有資料不代表大家都有空。" />
+      {session.teams.length > 0 && (items === null || members === null) && !error && <Status kind="loading" />}
+      {items !== null && members !== null && session.teams.length > 0 && (
+        <>
+          <DayTimeline day={day} members={members} items={items} nowMinutes={day === today ? nowMinutesIn(tz) : null} />
+          {items.length === 0 && <p className="muted center">這天還沒有人登錄行程。沒有資料不代表大家都有空。</p>}
+          {truncated && <p className="muted center">行程超過 100 筆，部分未顯示。</p>}
+        </>
       )}
-      {items !== null && items.length > 0 && <EventList items={items} showOwner />}
-      {offset !== null && <button className="more" onClick={() => void loadMore()}>載入更多</button>}
       <p className="scope-note">{SCOPE_NOTE}</p>
     </div>
   );

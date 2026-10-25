@@ -240,7 +240,7 @@ class ConversationHandler:
             return [text(f"{cards.NO_EVENTS}\n（{cards.SCOPE_NOTE}）")]
         lines = [f"{_range_title(first, last)}："]
         for v in page.items:
-            who = "我" if v.owner_user_id == user.id else v.owner_name
+            who = v.owner_name  # 一律顯示成員名稱，不用「我」
             if v.all_day:
                 span = cards.fmt_span(None, None, True, v.start_date, v.end_date)
             else:
@@ -314,8 +314,6 @@ class ConversationHandler:
             defaults = p.get("defaults_applied", [])
             if "duration_minutes=60" in defaults:
                 notes.append("結束時間為預設 1 小時")
-            if any(d.startswith("visibility=") for d in defaults):
-                notes.append("分享範圍為預設值，可按「修改」調整")
             if YEAR_INFERRED in (flags or []) and start is not None:
                 notes.append(f"年份推定為明年（{start.year}）")
             if start is not None and start.replace(tzinfo=tz) < now:

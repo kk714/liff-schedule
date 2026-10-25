@@ -58,7 +58,7 @@ def confirm_card(
     ]
     if location:
         body.append({"type": "text", "text": f"地點：{location}", "wrap": True, "size": "sm"})
-    if visibility:
+    if visibility and visibility != "team_detail":  # 只有非預設（例如私人）才需要提醒
         body.append({"type": "text", "text": f"分享：{VISIBILITY_LABEL.get(visibility, visibility)}", "size": "sm"})
     for note in notes:
         body.append({"type": "text", "text": note, "size": "xs", "color": "#B05A00", "wrap": True})

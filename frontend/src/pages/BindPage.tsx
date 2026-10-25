@@ -61,7 +61,7 @@ export function BindPage({ liff, onBound }: { liff: LiffClient; onBound: () => v
       <h1>您是「{state.name}」嗎？</h1>
       <p>確認後，這個 LINE 帳號會綁定到這位成員，之後就能在 LINE 用一句話新增、查詢行程。</p>
       <p className="muted">
-        行程預設只讓同團隊的成員看到「忙碌」時段；分享對象是目前的團隊成員，包含日後加入的人。
+        您登錄的行程會讓同團隊的成員看到（標題、時間、地點），方便大家找共同空檔開會。
       </p>
       <div className="actions">
         <button className="primary" disabled={state.step === "binding"} onClick={() => bind(state.name, state.organization)}>

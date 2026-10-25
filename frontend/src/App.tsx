@@ -9,6 +9,7 @@ import { realLiff, type LiffClient } from "./liff";
 import { BindPage } from "./pages/BindPage";
 import { DraftPage } from "./pages/DraftPage";
 import { MyPage } from "./pages/MyPage";
+import { NewPage } from "./pages/NewPage";
 import { TeamPage } from "./pages/TeamPage";
 
 interface Session {
@@ -97,10 +98,11 @@ function Shell({ liffFactory }: { liffFactory: () => Promise<LiffClient> }) {
           <Routes>
             <Route path="/drafts/:id" element={<DraftPage />} />
             <Route path="/team" element={<TeamPage />} />
+            <Route path="/new" element={<NewPage />} />
             <Route path="*" element={<MyPage />} />
           </Routes>
         </main>
-        {!location.pathname.startsWith("/drafts/") && (
+        {!location.pathname.startsWith("/drafts/") && location.pathname !== "/new" && (
           <nav className="tabbar">
             <NavLink to="/" end>我的行程</NavLink>
             <NavLink to="/team">團隊行程</NavLink>

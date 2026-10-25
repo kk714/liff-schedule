@@ -19,7 +19,8 @@ def test_form_draft_then_confirm(clients):
     draft = make_draft(me)
     assert draft["status"] == "awaiting_confirmation"
     assert draft["fields"]["end_local"] == "2026-11-01T15:00:00"
-    assert draft["defaults_applied"] == ["duration_minutes=60", "visibility=busy_only"]
+    assert draft["defaults_applied"] == ["duration_minutes=60"]  # 分享範圍不需提示
+    assert draft["fields"]["visibility"] == "team_detail"
 
     resp = confirm(me, draft)
     assert resp.status_code == 200

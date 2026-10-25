@@ -105,7 +105,8 @@ async def test_create_card_then_confirm(env):
     assert card["type"] == "flex"
     body = card_texts(card)
     assert "國網中心拜訪" in body and "2026/11/01（日） 14:00–15:00" in body
-    assert "結束時間為預設 1 小時" in body and "分享：僅顯示忙碌" in body
+    assert "結束時間為預設 1 小時" in body
+    assert not any(t.startswith("分享") for t in body)  # 預設團隊可見，不再提示分享範圍
     assert not any(t.startswith("地點") for t in body)  # 沒提供地點就不顯示（§5.1）
     assert await event_count(sessions) == 0
 
