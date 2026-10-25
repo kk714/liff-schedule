@@ -33,6 +33,11 @@ services:
     container_name: liff-backup
     restart: unless-stopped
     entrypoint: ["python", "-m", "app.backup", "--interval-hours", "24"]
+    depends_on:
+      app:
+        condition: service_healthy  # 等 migration 建好資料庫
+    healthcheck:
+      disable: true  # image 的健康檢查是給 API 用的
     environment:
       BACKUP_DIR: /backups
       BACKUP_KEEP: "14"

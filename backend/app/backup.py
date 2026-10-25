@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+RETRY_SECONDS = 300
+
 
 def source_path() -> Path:
     url = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:////data/app.db")
@@ -54,13 +56,15 @@ def main(argv: list[str] | None = None) -> int:
     while True:
         try:
             print(f"backup written: {backup(source_path(), Path(a.dest), keep=a.keep)}", flush=True)
+            delay = a.interval_hours * 3600 if not a.once else 0
         except Exception as exc:  # 備份失敗要看得到，但不能讓迴圈停掉
             print(f"backup failed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
             if a.once:
                 return 1
+            delay = RETRY_SECONDS  # 失敗時不等整個週期，稍後重試
         if a.once:
             return 0
-        time.sleep(a.interval_hours * 3600)
+        time.sleep(delay)
 
 
 if __name__ == "__main__":
