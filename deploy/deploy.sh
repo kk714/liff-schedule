@@ -15,7 +15,8 @@ echo "==> build liff-schedule:$TAG"
 docker build -t "liff-schedule:$TAG" -t liff-schedule:latest "$ROOT"
 
 echo "==> upload image"
-docker save "liff-schedule:$TAG" | gzip | "${SSH[@]}" "gunzip | sudo docker load"
+docker save "liff-schedule:$TAG" | gzip | "${SSH[@]}" "gunzip | sudo docker load && sudo docker tag liff-schedule:$TAG liff-schedule:latest"
+# 伺服器上的 latest 永遠指向最後部署的版本，手動 docker compose up 時才不會去 registry 拉
 
 echo "==> upload compose files"
 tar -C "$ROOT/deploy" -cf - docker-compose.yml nginx | "${SSH[@]}" "sudo tar -C $REMOTE_DIR -xf -"
