@@ -1,4 +1,4 @@
-import { addDays, dayLabel, monthRange, spanText, todayIn, weekStart } from "../dates";
+import { addDays, addMonths, dayLabel, monthRange, spanText, todayIn, weekStart } from "../dates";
 
 const timed = (s: string, e: string | null) => ({ all_day: false, start_local: s, end_local: e, start_date: null, end_date: null });
 
@@ -35,4 +35,11 @@ test("todayIn uses the user's timezone, not the browser's", () => {
   const instant = new Date("2026-10-21T17:30:00Z"); // 台北已是 10/22 01:30
   expect(todayIn("Asia/Taipei", instant)).toBe("2026-10-22");
   expect(todayIn("America/Los_Angeles", instant)).toBe("2026-10-21");
+});
+
+test("addMonths keeps the day or clamps to month end", () => {
+  expect(addMonths("2026-10-26", 1)).toBe("2026-11-26");
+  expect(addMonths("2026-12-15", 1)).toBe("2027-01-15");
+  expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
+  expect(addMonths("2026-01-10", -1)).toBe("2025-12-10");
 });

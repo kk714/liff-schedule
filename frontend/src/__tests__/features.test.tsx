@@ -151,3 +151,30 @@ function todayAt(hhmm: string): string {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
   return `${today}T${hhmm}:00`;
 }
+
+test("my page can step to the next month and back", async () => {
+  at("/");
+  const queries: URL[] = [];
+  mockApi({
+    "GET /api/config": CONFIG, "GET /api/me": ME,
+    "GET /api/events": (_: unknown, url: URL) => {
+      queries.push(url);
+      return { json: { items: [], has_more: false, next_offset: null } };
+    },
+  });
+  render(<App liffFactory={async () => fakeLiff()} />);
+  await userEvent.click(await screen.findByRole("tab", { name: "月" }));
+  const today = todayAt("00:00").slice(0, 10);
+  const [y, m] = today.split("-").map(Number);
+  expect(screen.getByText(`${y} 年 ${m} 月・本月`)).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: "下一個月" }));
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  expect(await screen.findByText(`${ny} 年 ${nm} 月`)).toBeInTheDocument();
+  const last = queries[queries.length - 1];
+  expect(last.searchParams.get("start_date")).toBe(`${ny}-${String(nm).padStart(2, "0")}-01`);
+
+  await userEvent.click(screen.getByRole("button", { name: "本月" }));
+  expect(screen.getByText(`${y} 年 ${m} 月・本月`)).toBeInTheDocument();
+});

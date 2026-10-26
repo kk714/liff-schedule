@@ -44,6 +44,16 @@ export function monthRange(iso: string): [string, string] {
   return [formatISODate({ y, m, d: 1 }), formatISODate({ y, m, d: last })];
 }
 
+/** 移到前後 n 個月的同一天；該月沒有這天就取月底（1/31 → 2/28）。 */
+export function addMonths(iso: string, months: number): string {
+  const { y, m, d } = parseDate(iso);
+  const index = y * 12 + (m - 1) + months;
+  const ny = Math.floor(index / 12);
+  const nm = (index % 12) + 1;
+  const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return formatISODate({ y: ny, m: nm, d: Math.min(d, last) });
+}
+
 /** 使用者時區的「今天」。 */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" })

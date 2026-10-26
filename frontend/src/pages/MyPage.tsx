@@ -1,4 +1,4 @@
-// 我的行程：今天／本週／本月；可從這裡新增、修改、取消（都會先建草稿，再到確認頁確認）。
+// 我的行程：日／週／月，可用前後按鈕切換到其他日期、週、月份；可從這裡新增、修改、取消（都會先建草稿，再到確認頁確認）。
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,7 +6,7 @@ import { useApp } from "../App";
 import { api, errorMessage, type EventItem } from "../api";
 import { EventList, SCOPE_NOTE } from "../components/EventList";
 import { Status } from "../components/Status";
-import { addDays, monthRange, todayIn, weekStart } from "../dates";
+import { addDays, addMonths, dayLabel, monthRange, parseDate, todayIn, weekStart } from "../dates";
 
 type Range = "today" | "week" | "month";
 
@@ -15,6 +15,21 @@ function bounds(range: Range, today: string): [string, string] {
   if (range === "week") return [weekStart(today), addDays(weekStart(today), 6)];
   return monthRange(today);
 }
+
+function shift(range: Range, anchor: string, step: number): string {
+  if (range === "today") return addDays(anchor, step);
+  if (range === "week") return addDays(anchor, step * 7);
+  return addMonths(anchor, step);
+}
+
+function rangeLabel(range: Range, start: string, end: string): string {
+  if (range === "today") return dayLabel(start);
+  if (range === "week") return `${dayLabel(start)}–${dayLabel(end)}`;
+  const { y, m } = parseDate(start);
+  return `${y} 年 ${m} 月`;
+}
+
+const CURRENT: Record<Range, string> = { today: "今天", week: "本週", month: "本月" };
 
 export function MyPage() {
   const { session } = useApp();
@@ -25,7 +40,9 @@ export function MyPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const today = todayIn(session.user.timezone);
-  const [start, end] = bounds(range, today);
+  const [anchor, setAnchor] = useState(today);
+  const [start, end] = bounds(range, anchor);
+  const isCurrent = start <= today && today <= end;
 
   useEffect(() => {
     let cancelled = false;
@@ -77,9 +94,15 @@ export function MyPage() {
       <div className="segmented" role="tablist">
         {(["today", "week", "month"] as Range[]).map((r) => (
           <button key={r} role="tab" aria-selected={range === r} className={range === r ? "active" : ""} onClick={() => setRange(r)}>
-            {{ today: "今天", week: "本週", month: "本月" }[r]}
+            {{ today: "日", week: "週", month: "月" }[r]}
           </button>
         ))}
+      </div>
+      <div className="day-nav">
+        <button aria-label={`上一${{ today: "天", week: "週", month: "個月" }[range]}`} onClick={() => setAnchor(shift(range, anchor, -1))}>‹</button>
+        <span className="range-label">{rangeLabel(range, start, end)}{isCurrent ? `・${CURRENT[range]}` : ""}</span>
+        <button aria-label={`下一${{ today: "天", week: "週", month: "個月" }[range]}`} onClick={() => setAnchor(shift(range, anchor, 1))}>›</button>
+        {!isCurrent && <button className="small" onClick={() => setAnchor(today)}>{CURRENT[range]}</button>}
       </div>
       {error && <p className="alert" role="alert">{error}</p>}
       {items === null && !error && <Status kind="loading" />}
